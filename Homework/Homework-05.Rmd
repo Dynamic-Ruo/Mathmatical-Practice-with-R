@@ -1,6 +1,6 @@
 ---
 title: "Homework 5: Pareto and Kuznets on the Grand Tour"
-author: Xu Yuan <br/> 3170104292
+author: Yakitori
 output: pdf_document
 ---
 
