@@ -1,0 +1,137 @@
+---
+title: "Homework 5: Pareto and Kuznets on the Grand Tour"
+author: Xu Yuan <br/> 3170104292
+output: pdf_document
+---
+
+We continue working with the World Top Incomes Database [https://wid.world], and the Pareto distribution, as in the lab.  We also continue to practice working with data frames, manipulating data from one format to another, and writing functions to automate repetitive tasks.
+
+<br/>
+
+We saw in the lab that if the upper tail of the income distribution followed a perfect Pareto distribution, then
+\begin{eqnarray}
+\label{eqn:1percent-vs-0.1-percent}
+\left(\frac{P99}{P99.9}\right)^{-a+1}  & = & 10\\
+\left(\frac{P99.5}{P99.9}\right)^{-a+1} & = & 5\\
+\left(\frac{P99}{P99.5}\right)^{-a+1} & = & 2
+\label{eqn:1percent-vs-0.5-percent}
+\end{eqnarray}
+We could estimate the Pareto exponent by solving any one of these equations for $a$; in lab we used
+\begin{equation}
+a = 1 - \frac{\log{10}}{\log{(P99/P99.9)}} ~,
+\label{eqn:exponent-from-quantile-ratio}
+\end{equation}
+
+Because of measurement error and sampling noise, we can't find find one value of $a$ which will work for all three equations \eqref{eqn:1percent-vs-0.1-percent}--\eqref{eqn:1percent-vs-0.5-percent}.  Generally, trying to make all three equations come close to balancing gives a better estimate of $a$ than just solving one of them.  (This is analogous to finding the slope and intercept of a regression line by trying to come close to all the points in a scatterplot, and not just running a line through two of them.)
+
+<br/>
+
+<br/>
+
+1. We estimate $a$ by minimizing
+\[
+\left(\left(\frac{P99}{P99.9}\right)^{-a+1} - 10\right)^2 + \left(\left(\frac{P99.5}{P99.9}\right)^{-a+1} - 5\right)^2 +  \left(\left(\frac{P99}{P99.5}\right)^{-a+1} - 2\right)^2
+\]
+Write a function, `percentile_ratio_discrepancies`, which takes as inputs `P99`, `P99.5`, `P99.9` and `a`, and returns the value of the expression above.  Check that when `P99=1e6`, `P99.5=2e6`, `P99.9=1e7` and `a=2`, your function returns `0`.
+
+<br/>
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+```{r}
+# estimate function
+percentile_ratio_discrepancies <- function(P99, P99.5, P99.9, a){
+  ans <- ((P99 / P99.9)^(-a+1) - 10) ^ 2 + ((P99.5 / P99.9)^(-a+1) - 5) ^ 2 + 
+    ((P99 / P99.5)^(-a+1) - 2) ^ 2
+    return(ans)
+}
+```
+
+```{r}
+# test
+percentile_ratio_discrepancies(1e6, 2e6, 1e7, 2)
+```
+
+<br/>
+
+<br/>
+
+2. Write a function, `exponent.multi_ratios_est`, which takes as inputs `P99`, `P99.5`, `P99.9`, and estimates `a`.  It should minimize your `percentile_ratio_discrepancies` function.  The starting value for the minimization should come from \eqref{eqn:exponent-from-quantile-ratio}.  Check that when `P99=1e6`, `P99.5=2e6` and `P99.9=1e7`, your function returns an `a` of 2.
+
+<br/>
+
+```{r}
+# estimate a
+exponent.multi_ratios_est <- function(vec){
+  P99 <- vec[1]
+  P99.5 <- vec[2]
+  P99.9 <- vec[3]
+  a <- log(10) / log(P99 / P99.9)
+  result <- optim(par = a, fn = percentile_ratio_discrepancies, 
+               P99 = P99, P99.5 = P99.5, P99.9 = P99.9)
+  return(result$par)
+}
+```
+
+```{r}
+# test
+exponent.multi_ratios_est(c(1e6, 2e6, 1e7))
+```
+
+<br/>
+
+<br/>
+
+3. Write a function which uses  `exponent.multi_ratios_est` to estimate $a$ for the US for every year from 1913 to 2012.  (There are many ways you could do this, including loops.)  Plot the estimates; make sure the labels of the plot are appropriate.
+
+<br/>
+
+```{r}
+exponent.multi_ratios_est_every_year <- function(df){
+  result <- apply(df, 1, exponent.multi_ratios_est)
+  return(result)
+}
+```
+
+```{r, message=F, warning=F}
+# read in the data
+wtid <- read.csv('wtid-report.csv')
+# estimate
+wtid.a <- exponent.multi_ratios_est_every_year(wtid[, 5:7]) %>% as.data.frame()
+colnames(wtid.a) <- c('estimate')
+wtid.a$Year <- 1913:2012
+# plot
+wtid.a %>% ggplot() + geom_point(aes(x = Year, y = estimate)) + 
+  labs(x = 'Year', y = 'estimate_a', title = 'estimate a for the US from 1913 to 2012')
+```
+
+<br/>
+
+<br/>
+
+4. Use \eqref{eqn:exponent-from-quantile-ratio} to estimate $a$ for the US for every year.  Make a scatter-plot of these estimates against those from problem 3.  If they are identical or completely independent, something is wrong with at least one part of your code.  Otherwise, can you say anything about how the two estimates compare?
+
+<br/>
+
+```{r}
+# initialization
+wtid.a2 <- data.frame(Year = 1913:2012, estimate_a1 = wtid.a$estimate, 
+                      estimate_a2 = rep(0, 200))
+
+# estimate in two methods
+wtid.a2$estimate_a2 <- 
+  1 - log(10) / log(wtid$P99.income.threshold / wtid$P99.9.income.threshold)
+
+# plot
+wtid.a2 %>% ggplot(aes(x = estimate_a1, y = estimate_a2)) + 
+  geom_point() + 
+  geom_smooth() + 
+  labs(x = 'Part 3', y = 'Equation (4)', 
+       title = 'Comparison between two estimation methods')
+```
+
+<br/>
+
+These two estimations are almost the same since we can fit it by $y = x$.
